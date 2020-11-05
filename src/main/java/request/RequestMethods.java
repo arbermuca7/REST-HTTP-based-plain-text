@@ -9,8 +9,7 @@ public enum RequestMethods {
     GET("GET"),
     POST("POST"),
     PUT("PUT"),
-    DELETE("DELETE"),
-    PATCH("PATCH");
+    DELETE("DELETE");
 
     String method;
     private static List<String> val;
@@ -30,7 +29,7 @@ public enum RequestMethods {
         }
     }
 
-    private static boolean hasMethod(String method){
+    public static boolean hasMethod(String method){
         if(val == null){
             initList();
         }

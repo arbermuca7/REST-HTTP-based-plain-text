@@ -5,9 +5,7 @@ import response.ResponseStatusCode;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -16,6 +14,7 @@ import java.util.StringTokenizer;
 public class HTTPServer implements Runnable {
 
     Socket cli;
+
     HTTPServer(Socket s){
         cli = s;
     }
@@ -30,60 +29,140 @@ public class HTTPServer implements Runnable {
                 HTTPServer httpServer = new HTTPServer(serverSocket.accept());
                 Thread thread = new Thread(httpServer);
                 thread.start();
+
             }
 
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-
     }
-
     @Override
     public void run() {
-        System.out.println("Client: "+cli.toString());
         //read the request
         BufferedReader in = null;
         PrintWriter out = null;
         BufferedOutputStream contentSend = null;
-        String inputStream = null;
+        String inputStream;
+        //List of all Messages
+        List<String> messages = new ArrayList<String>();
         try{
+            //read the characters from the client
             in = new BufferedReader(new InputStreamReader(cli.getInputStream()));
+            //we send or get the character output stream to the client -> for header
             out = new PrintWriter(cli.getOutputStream());
+            //we send or get the binary output stream to the client -> for body
             contentSend = new BufferedOutputStream(cli.getOutputStream());
+            //get the first line of the request
             inputStream = in.readLine();
-            StringTokenizer parse = null;
 
-            if (inputStream != null){
-                parse = new StringTokenizer(inputStream);
-            }
+            StringTokenizer st = null;
+            String method = null;
+            String path = null;
+            String version = null;
+            if (inputStream != null) {
+                //parse the request
+                st = new StringTokenizer(inputStream);
+                //get the method
+                method = st.nextToken().toUpperCase();
+                //System.out.println("methode: " + method);
+                //get the path
+                path = st.nextToken().toLowerCase();
+                //System.out.println("path: " + path);
+                //get the version
+                version = st.nextToken().toUpperCase();
+                //System.out.println("version: " + version);
 
-            String method = parse.nextToken().toUpperCase();
-            System.out.println("methode: "+method);
-            String path = parse.nextToken().toLowerCase();
-            System.out.println("path: "+path);
-            String version = parse.nextToken().toUpperCase();
-            System.out.println("version: "+version);
+                String body = null;
 
-            if(method.equals(RequestMethods.GET.getVal())){
-                out.println("HTTP/1.1 200 OK\r\n");
-                out.println(("ContentType: text/html\r\n"));
-                out.println("\r\n");
-                out.println("<b>It works!</b>");
-                out.println(); // blank line between headers and content, very important !
-                out.flush(); // flush character output stream buffer
-                if(path.equals("/messages")){
-                    contentSend.write("<h1>Du hast es geschaft</h1>".getBytes());
-                    contentSend.flush();
+                String contentType = null;
+
+                if (!method.equals(RequestMethods.GET.getVal()) && !method.equals(RequestMethods.POST.getVal()) && !method.equals(RequestMethods.PUT.getVal()) && !method.equals(RequestMethods.DELETE.getVal())){
+                    //send a response 501 not implemented, if we haven't implement the asked Method
+                    sendRespond(cli,out,contentSend, ResponseStatusCode.getDesc(501),version,contentType,"wrong Method chosen".getBytes());
+
                 }
+                else if (method.equals(RequestMethods.GET.getVal())) {
+                    String msgID = null;
+                    String[] pathSplited = path.split("/");
+                    //String datei = pathSplited[1];
+                    if (pathSplited.length == 3){
+                        msgID  = pathSplited[2];
+                    }
+                    //out.println(version + " " + ResponseStatusCode.getDesc(200));
+                    //out.println(("ContentType: text/html"));
+                    //out.println(); // blank line between headers and content, very important !
+                    //out.flush(); // flush character output stream buffer
+                    //contentSend.write("bodyContent".getBytes());
+                    //contentSend.flush();
+                    //System.out.println("Path: "+path);
 
-                //if the path exists
-                /*Path filepath = filePath(path);
-                if(Files.exists(filepath)){
-                        String conTyp = findContentTyp(filepath);
-                        sendRespond(cli, ResponseStatusCode.getDesc(200),conTyp,version,Files.readAllBytes(filepath));
-                }*/
+                    //System.out.println("Body: "+bodyContent);
+                    //messages.add(bodyContent);
+                    //System.out.println("Message: "+messages);
+
+                    if (path.equals("/messages")) {
+                        int i = 0;
+                        StringBuilder msgBuilder = new StringBuilder();
+                        System.out.println("List Length:"+messages.size());
+                        while (i < messages.size() - 1) {
+                            msgBuilder.append(messages.indexOf(messages.get(i))+":"+messages.get(i) + "|");
+                            i++;
+                        }
+                        msgBuilder.append(messages.indexOf(messages.get(i))+":"+messages.get(i));
+                        String allMessages = msgBuilder.toString();
+                        //send the respond to the client
+                        sendRespond(cli, out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, allMessages.getBytes());
+
+                    }
+                    else if(path.equals("/messages/"+msgID)){
+                            //return the given ID from String to int
+                            int msgId=Integer.parseInt(msgID);
+                            //send the respond to the client
+                            String specificMsg = messages.indexOf(messages.get(msgId-1))+": "+messages.get(msgId-1);
+                            sendRespond(cli,out,contentSend, ResponseStatusCode.getDesc(200),version,contentType,specificMsg.getBytes());
+                    }
+                    else{
+                        sendRespond(cli,out,contentSend, ResponseStatusCode.getDesc(404),version,contentType,"Wrong URI".getBytes());
+
+                    }
+                }
+                else if (method.equals(RequestMethods.POST.getVal())) {
+                    //take the other part of the header + the body
+                    StringBuilder requestBody = new StringBuilder();
+                    //divide every field of the header and the last part(the body) with a newline
+                    while (in.ready()) {
+                        String line = in.readLine();
+                        requestBody.append(line + "\r\n");
+                    }
+                    body = requestBody.toString();
+
+                    String[] requestLines = body.split("\r\n");
+                    //split the line of the content type where a space is
+                    String[] requestLine = requestLines[0].split(" ");
+                    //take the content type
+                    contentType = requestLine[1];
+                    //list for the header
+                    List<String> _headers = new ArrayList<String>();
+                    //save the header in the List
+                    for (int i = 1; i < requestLines.length; i++) {
+                        String header = requestLines[i];
+                        _headers.add(header);
+                    }
+                    String bodyContent = null;
+                    //save the body into a string
+                    if (_headers != null && !_headers.isEmpty()) {
+                        bodyContent = _headers.get(_headers.size() - 1);
+                    }
+                    messages.add(bodyContent);
+                    //send the response on the client
+                    String messageContent =messages.indexOf(messages.get(messages.size()-1))+1+": "+messages.get(messages.size()-1);
+                    sendRespond(cli,out,contentSend, ResponseStatusCode.getDesc(201),version,contentType,messageContent.getBytes());
+                    System.out.println("List in the post: "+messages);
+                }
+                System.out.println("List outside the if: "+messages);
             }
+
         } catch (IOException e) {
             e.printStackTrace();
         }finally {
@@ -91,79 +170,63 @@ public class HTTPServer implements Runnable {
                 in.close();
                 out.close();
                 contentSend.close();
-                cli.close();
+                //cli.close();
             } catch (IOException e) {
                 System.err.println("Error closing stream : " + e.getMessage());
             }
         }
     }
-    private static void sendRespond(Socket cli, String status, String version, String contentTyp, byte[] content) throws IOException {
+
+    private static void sendRespond(Socket cli,PrintWriter out,BufferedOutputStream contentSend, String status, String version, String contentTyp, byte[] content) throws IOException {
         //send the response to the client's output stream
-        OutputStream cliOut = cli.getOutputStream();
-        cliOut.write((version + status+"\r\n").getBytes());
-        cliOut.write(("ContentType:" + contentTyp + "\r\n").getBytes());
-        cliOut.write("\r\n".getBytes());
-        cliOut.write(content);
-        cliOut.write("\r\n\r\n".getBytes());
-        cliOut.flush();
-        cli.close();
-
-    }
-    private static String findContentTyp(Path path) throws IOException {
-        return Files.probeContentType(path);
+        out.println(version +" "+ status);
+        out.println("ContentType: "+ contentTyp);
+        out.println(); // blank line between headers and content, very important !
+        out.flush(); // flush character output stream buffer
+        contentSend.write(content);
+        contentSend.flush();
     }
 
-
-
-
-
-
+    /*
     private static void handleClient(Socket cli) throws IOException {
-       /*
         //read the request
         BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(cli.getInputStream()));
-        String input = bufferedReader.readLine();
-        StringTokenizer parse = new StringTokenizer(input);
-        String method = parse.nextToken().toUpperCase();
-        System.out.println("methode: "+method);
-        String file = parse.nextToken().toLowerCase();
-        System.out.println("file: "+file);
-
-
-        //StringBuilder requestBuilder = new StringBuilder();
+        StringBuilder requestBuilder = new StringBuilder();
         String line;
         //request end with one empty line
         //we read it until an empty line comes
-        List <String> req = new ArrayList<>();
-
-        while((line= bufferedReader.readLine())!=null && !line.isBlank()){
-            //requestBuilder.append(line + "\r\n");
-            req.add(line + "\r\n");
+        while((line= bufferedReader.readLine())!=null && !line.equals("")){
+            requestBuilder.append(line);
+           requestBuilder.append("\r\n");
         }
-        System.out.println("List: "+ req);
-        //String request = requestBuilder.toString();
+        String request = requestBuilder.toString();
         //parse the request
-        //String[] requestLines = request.split("\r\n");
-        String[] requestLine  = req.get(0).split(" ");
+        String[] requestLines = request.split("\r\n");
+        String[] requestLine  = requestLines[0].split(" ");
         String method = requestLine[0];
         System.out.println("methode: "+method);
         String path = requestLine[1];
         System.out.println("path: "+path);
         String version = requestLine[2];
         System.out.println("version: "+version);
-        String host = req.get(1).split(" ")[1];
+        String host = requestLines[1].split(" ")[1];
         System.out.println("host: "+host);
         //list for the header
-        List<String> _headers = new ArrayList<>();
+         List<String> _headers = new ArrayList<>();
         //save the header in the List
         //we start at 2 because the first line is (method, path and version)
         //and second line is the host
-        //for(int i = 2; i<requestLines.length; i++){
-            //String header = requestLines[i];
-        for(int i = 2; i<req.size(); i++){
-            String header = req.get(i);
+        for(int i = 2; i<requestLines.length; i++){
+            String header = requestLines[i];
+            //for(int i = 2; i<req.size(); i++){
+            //String header = req.get(i);
             _headers.add(header);
         }
+
+        String access = String.format("Client --> %s, method --> %s, path --> %s, version --> %s, host --> %s, headers --> %s",
+                cli.toString(),method,path,version,host, _headers.toString());
+        System.out.println(access);
+
         //if the method is post
         String body = null;
         if (method.equals(RequestMethods.POST.getVal())) {
@@ -175,19 +238,15 @@ public class HTTPServer implements Runnable {
             body = requestBody.toString();
         }
 
-
-        String access = String.format("Client %s, method %s, path %s, version %s, host %s, headers %s",
-               cli.toString(),method,path,version,host, _headers.toString());
-        System.out.println(access);
-     OutputStream clientOutput = cli.getOutputStream();
+      OutputStream clientOutput = cli.getOutputStream();
         clientOutput.write("HTTP/1.1 200 OK\r\n".getBytes());
         clientOutput.write(("ContentType: text/html\r\n").getBytes());
         clientOutput.write("\r\n".getBytes());
         clientOutput.write("<b>It works!</b>".getBytes());
         clientOutput.write("\r\n\r\n".getBytes());
         clientOutput.flush();
-        cli.close();*/
+        cli.close();
 
 
-    }
+    }*/
 }

@@ -149,7 +149,7 @@ public class HTTPServer implements Runnable {
                         }
                         else{
                             messages.set(msgId-1,bodyContent);
-                            String specificMsgUpdate = messages.indexOf(messages.get(msgId-1))+": "+messages.get(msgId-1);
+                            String specificMsgUpdate = messages.indexOf(messages.get(msgId-1))+1+": "+messages.get(msgId-1);
                             sendRespond(out,contentSend, ResponseStatusCode.getDesc(200),version,contentType,specificMsgUpdate.getBytes());
                             System.out.println("list:"+messages);
                         }
@@ -186,9 +186,11 @@ public class HTTPServer implements Runnable {
         StringBuilder requestBody = new StringBuilder();
         //divide every field of the header and the last part(the body) with a newline
         while (in.ready()) {
-            String line = in.readLine();
-            requestBody.append(line + "\r\n");
-            System.out.println("Line in while: "+line);
+            char temp = (char) in.read();
+            requestBody.append(temp);
+            //String line = in.readLine();
+            //requestBody.append(line + "\r\n");
+            System.out.println("Line in while: "+temp);
         }
         String body = requestBody.toString();
 

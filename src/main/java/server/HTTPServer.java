@@ -84,6 +84,7 @@ public class HTTPServer implements Runnable {
                     }
                     if (path.equals("/messages")) {
                         int i = 0;
+
                         StringBuilder msgBuilder = new StringBuilder();
                         while (i < messages.size() - 1) {
                             msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i) + "--|--");
@@ -109,6 +110,7 @@ public class HTTPServer implements Runnable {
                 else if (method.equals(RequestMethods.POST.getVal())) {
 
                     String bodyReq = takeTheBody(in);
+
                     String[] bodySplit = bodyReq.split(",");
                     String bodyContent = bodySplit[0];
                     contentType = bodySplit[1];
@@ -119,42 +121,62 @@ public class HTTPServer implements Runnable {
                     sendRespond(out,contentSend, ResponseStatusCode.getDesc(201),version,contentType,messageContent.getBytes());
                 }
                 //update a message in the list
-                else if(method.equals(RequestMethods.PUT.getVal())){
+                else if(method.equals(RequestMethods.PUT.getVal())) {
 
                     String bodyReq = takeTheBody(in);
+
                     String[] bodySplit = bodyReq.split(",");
                     String bodyContent = bodySplit[0];
                     contentType = bodySplit[1];
 
-                    String msgID=null;
+                    String msgID = null;
+                    String[] pathSplited = path.split("/");
+                    if (pathSplited.length == 3) {
+                        msgID = pathSplited[2];
+                        System.out.println("id:" + msgID);
+                    }
+                    if (path.equals("/messages/" + msgID)) {
+                        //return the given ID from String to int
+                        int msgId = Integer.parseInt(msgID);
+                        //if the input with that values doesnt exist then add a new one.
+                        if (bodyContent == null) {
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(204), version, contentType, "no content".getBytes());
+                        } else if (messages.size() <= msgId) {
+                            messages.add(bodyContent);
+                            System.out.println("list in post if not exist the id:" + messages);
+                            //send the response on the client
+                            String messageContent = messages.indexOf(messages.get(messages.size() - 1)) + 1 + ": " + messages.get(messages.size() - 1);
+                            //System.out.println("MSG: "+messageContent);
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(201), version, contentType, messageContent.getBytes());
+                        } else {
+                            messages.set(msgId - 1, bodyContent);
+                            String specificMsgUpdate = messages.indexOf(messages.get(msgId - 1)) + 1 + ": " + messages.get(msgId - 1);
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, specificMsgUpdate.getBytes());
+                            System.out.println("list:" + messages);
+                        }
+                    } else {
+                        sendRespond(out, contentSend, ResponseStatusCode.getDesc(404), version, contentType, "You can only update a specific message".getBytes());
+                    }
+                }
+                //delete a certain message from the list
+                else if(method.equals(RequestMethods.DELETE.getVal())){
+                    String msgID = null;
                     String[] pathSplited = path.split("/");
                     if (pathSplited.length == 3){
                         msgID  = pathSplited[2];
-                        System.out.println("id:"+msgID);
                     }
                     if (path.equals("/messages/"+msgID)){
-                        //return the given ID from String to int
                         int msgId=Integer.parseInt(msgID);
-                        //if the input with that values doesnt exist then add a new one.
-                        if(bodyContent == null){
-                            sendRespond(out,contentSend, ResponseStatusCode.getDesc(204),version,contentType,"no content".getBytes());
+                        if (msgId>=messages.size()){
+                            System.out.println("gesuchte MsgId ist nicht in der Array");
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(404), version, contentType, "ID not founded".getBytes());
+                        }else{
+                            messages.remove(msgId-1);
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, "".getBytes());
                         }
-                        else if(messages.size()<=msgId){
-                            messages.add(bodyContent);
-                            System.out.println("list inpost if not exist the id:"+messages);
-                            //send the response on the client
-                            String messageContent =messages.indexOf(messages.get(messages.size()-1))+1+": "+messages.get(messages.size()-1);
-                            //System.out.println("MSG: "+messageContent);
-                            sendRespond(out,contentSend, ResponseStatusCode.getDesc(201),version,contentType,messageContent.getBytes());
-                        }
-                        else{
-                            messages.set(msgId-1,bodyContent);
-                            String specificMsgUpdate = messages.indexOf(messages.get(msgId-1))+1+": "+messages.get(msgId-1);
-                            sendRespond(out,contentSend, ResponseStatusCode.getDesc(200),version,contentType,specificMsgUpdate.getBytes());
-                            System.out.println("list:"+messages);
-                        }
+
                     }else{
-                        sendRespond(out,contentSend, ResponseStatusCode.getDesc(404),version,contentType,"You can only update a specific message".getBytes());
+                        sendRespond(out, contentSend, ResponseStatusCode.getDesc(405), version, contentType, "You aren't allowed to delete the entire List".getBytes());
                     }
                 }
             }

@@ -28,7 +28,6 @@ public class HTTPServer implements Runnable {
 
             while (true){
                 //accept the client connection
-
                 HTTPServer httpServer = new HTTPServer(serverSocket.accept(),messages);
                 Thread thread = new Thread(httpServer);
                 thread.start();
@@ -47,8 +46,6 @@ public class HTTPServer implements Runnable {
         PrintWriter out = null;
         BufferedOutputStream contentSend = null;
         String inputStream;
-        //List of all Messages
-
         try{
             //read the characters from the client
             in = new BufferedReader(new InputStreamReader(cli.getInputStream()));
@@ -60,37 +57,36 @@ public class HTTPServer implements Runnable {
             inputStream = in.readLine();
 
             if (inputStream != null) {
-                //parse the request
-                StringTokenizer st = new StringTokenizer(inputStream);
+
+                String headerPart = readFirstLineHeader(inputStream);
+                String[] headerPartSplit = headerPart.split(",");
                 //get the method
-                String method = st.nextToken().toUpperCase();
+                String method = headerPartSplit[0];
                 //get the path
-                String path = st.nextToken().toLowerCase();
+                String path = headerPartSplit[1];
                 //get the version
-                String version = st.nextToken().toUpperCase();
-                String body;
+                String version = headerPartSplit[2];
+                //save the content-type
                 String contentType = null;
 
                 if (!method.equals(RequestMethods.GET.getVal()) && !method.equals(RequestMethods.POST.getVal()) && !method.equals(RequestMethods.PUT.getVal()) && !method.equals(RequestMethods.DELETE.getVal())){
                     //send a response 501 not implemented, if we haven't implement the asked Method
-                    sendRespond(out,contentSend, ResponseStatusCode.getDesc(501),version,contentType,"Wrong Method chosen".getBytes());
+                    sendRespond(out,contentSend, ResponseStatusCode.getDesc(501),version,contentType,"Wrong method chosen".getBytes());
                 }
                 else if (method.equals(RequestMethods.GET.getVal())) {
-                    String msgID = null;
-                    String[] pathSplited = path.split("/");
-                    //String datei = pathSplited[1];
-                    if (pathSplited.length == 3){
-                        msgID  = pathSplited[2];
-                    }
+
+                    String msgID = pathSpliter(path);
+
                     if (path.equals("/messages")) {
                         int i = 0;
 
                         StringBuilder msgBuilder = new StringBuilder();
+                        msgBuilder.append("{ ");
                         while (i < messages.size() - 1) {
-                            msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i) + "--|--");
+                            msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i) + " , ");
                             i++;
                         }
-                        msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i));
+                        msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i)+" }");
                         String allMessages = msgBuilder.toString();
                         //send the respond to the client
                         sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, allMessages.getBytes());
@@ -98,7 +94,7 @@ public class HTTPServer implements Runnable {
                     }
                     else if(path.equals("/messages/"+msgID)){
                             //return the given ID from String to int
-                            int msgId=Integer.parseInt(msgID);
+                            int msgId = Integer.parseInt(msgID);
                             //send the respond to the client
                             String specificMsg = messages.indexOf(messages.get(msgId-1))+1+": "+messages.get(msgId-1);
                             sendRespond(out,contentSend, ResponseStatusCode.getDesc(200),version,contentType,specificMsg.getBytes());
@@ -112,10 +108,12 @@ public class HTTPServer implements Runnable {
                     String bodyReq = takeTheBody(in);
 
                     String[] bodySplit = bodyReq.split(",");
+
                     String bodyContent = bodySplit[0];
                     contentType = bodySplit[1];
+
                     messages.add(bodyContent);
-                    System.out.println("in post: "+messages);
+
                     //send the response on the client
                     String messageContent =messages.indexOf(messages.get(messages.size()-1))+1+": "+messages.get(messages.size()-1);
                     sendRespond(out,contentSend, ResponseStatusCode.getDesc(201),version,contentType,messageContent.getBytes());
@@ -126,24 +124,20 @@ public class HTTPServer implements Runnable {
                     String bodyReq = takeTheBody(in);
 
                     String[] bodySplit = bodyReq.split(",");
+
                     String bodyContent = bodySplit[0];
                     contentType = bodySplit[1];
 
-                    String msgID = null;
-                    String[] pathSplited = path.split("/");
-                    if (pathSplited.length == 3) {
-                        msgID = pathSplited[2];
-                        System.out.println("id:" + msgID);
-                    }
+                    String msgID = pathSpliter(path);
+
                     if (path.equals("/messages/" + msgID)) {
                         //return the given ID from String to int
                         int msgId = Integer.parseInt(msgID);
                         //if the input with that values doesnt exist then add a new one.
                         if (bodyContent == null) {
                             sendRespond(out, contentSend, ResponseStatusCode.getDesc(204), version, contentType, "no content".getBytes());
-                        } else if (messages.size() <= msgId) {
+                        } else if (messages.size() <= msgId-1) {
                             messages.add(bodyContent);
-                            System.out.println("list in post if not exist the id:" + messages);
                             //send the response on the client
                             String messageContent = messages.indexOf(messages.get(messages.size() - 1)) + 1 + ": " + messages.get(messages.size() - 1);
                             //System.out.println("MSG: "+messageContent);
@@ -160,15 +154,16 @@ public class HTTPServer implements Runnable {
                 }
                 //delete a certain message from the list
                 else if(method.equals(RequestMethods.DELETE.getVal())){
-                    String msgID = null;
+                    /*String msgID = null;
                     String[] pathSplited = path.split("/");
                     if (pathSplited.length == 3){
                         msgID  = pathSplited[2];
-                    }
+                    }*/
+                    String msgID = pathSpliter(path);
+
                     if (path.equals("/messages/"+msgID)){
                         int msgId=Integer.parseInt(msgID);
-                        if (msgId>=messages.size()){
-                            System.out.println("gesuchte MsgId ist nicht in der Array");
+                        if (msgId-1 >= messages.size()){
                             sendRespond(out, contentSend, ResponseStatusCode.getDesc(404), version, contentType, "ID not founded".getBytes());
                         }else{
                             messages.remove(msgId-1);
@@ -187,18 +182,42 @@ public class HTTPServer implements Runnable {
                 in.close();
                 out.close();
                 contentSend.close();
-                //cli.close();
+                cli.close();
             } catch (IOException e) {
                 System.err.println("Error closing stream : " + e.getMessage());
             }
         }
     }
 
+    private static String readFirstLineHeader(String input){
+        //parse the request
+        //StringTokenizer st = new StringTokenizer(inputStream);
+        StringTokenizer st = new StringTokenizer(input);
+        //get the method
+        String method = st.nextToken().toUpperCase();
+        //get the path
+        String path = st.nextToken().toLowerCase();
+        //get the version
+        String version = st.nextToken().toUpperCase();
+
+        String returnLine = method + "," + path + "," +version;
+        return returnLine;
+    }
+    private static String pathSpliter(String path){
+        String msgID = null;
+        String[] pathSplited = path.split("/");
+        if (pathSplited.length == 3){
+            msgID  = pathSplited[2];
+            return msgID;
+        }
+        return null;
+    }
+
     private static void sendRespond(PrintWriter out,BufferedOutputStream contentSend, String status, String version, String contentTyp, byte[] content) throws IOException {
         //send the response to the client's output stream
         out.println(version +" "+ status);
         out.println("ContentType: "+ contentTyp);
-        out.println(); // blank line between headers and content, very important !
+        out.println(); // blank line between headers and content
         out.flush(); // flush character output stream buffer
         contentSend.write(content);
         contentSend.flush();
@@ -208,11 +227,8 @@ public class HTTPServer implements Runnable {
         StringBuilder requestBody = new StringBuilder();
         //divide every field of the header and the last part(the body) with a newline
         while (in.ready()) {
-            char temp = (char) in.read();
-            requestBody.append(temp);
-            //String line = in.readLine();
-            //requestBody.append(line + "\r\n");
-            System.out.println("Line in while: "+temp);
+            char line = (char) in.read();
+            requestBody.append(line);
         }
         String body = requestBody.toString();
 
@@ -233,70 +249,9 @@ public class HTTPServer implements Runnable {
         if (_headers != null && !_headers.isEmpty()) {
             bodyContent = _headers.get(_headers.size() - 1);
         }
+
         String bodyPlusContentTyp= bodyContent+","+contentType;
+
         return bodyPlusContentTyp;
     }
-
-    /*
-    private static void handleClient(Socket cli) throws IOException {
-        //read the request
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(cli.getInputStream()));
-        StringBuilder requestBuilder = new StringBuilder();
-        String line;
-        //request end with one empty line
-        //we read it until an empty line comes
-        while((line= bufferedReader.readLine())!=null && !line.equals("")){
-            requestBuilder.append(line);
-           requestBuilder.append("\r\n");
-        }
-        String request = requestBuilder.toString();
-        //parse the request
-        String[] requestLines = request.split("\r\n");
-        String[] requestLine  = requestLines[0].split(" ");
-        String method = requestLine[0];
-        System.out.println("methode: "+method);
-        String path = requestLine[1];
-        System.out.println("path: "+path);
-        String version = requestLine[2];
-        System.out.println("version: "+version);
-        String host = requestLines[1].split(" ")[1];
-        System.out.println("host: "+host);
-        //list for the header
-         List<String> _headers = new ArrayList<>();
-        //save the header in the List
-        //we start at 2 because the first line is (method, path and version)
-        //and second line is the host
-        for(int i = 2; i<requestLines.length; i++){
-            String header = requestLines[i];
-            //for(int i = 2; i<req.size(); i++){
-            //String header = req.get(i);
-            _headers.add(header);
-        }
-
-        String access = String.format("Client --> %s, method --> %s, path --> %s, version --> %s, host --> %s, headers --> %s",
-                cli.toString(),method,path,version,host, _headers.toString());
-        System.out.println(access);
-
-        //if the method is post
-        String body = null;
-        if (method.equals(RequestMethods.POST.getVal())) {
-            StringBuilder requestBody = new StringBuilder();
-            while (bufferedReader.ready()) {
-                char temp = (char) bufferedReader.read();
-                requestBody.append(temp);
-            }
-            body = requestBody.toString();
-        }
-
-      OutputStream clientOutput = cli.getOutputStream();
-        clientOutput.write("HTTP/1.1 200 OK\r\n".getBytes());
-        clientOutput.write(("ContentType: text/html\r\n").getBytes());
-        clientOutput.write("\r\n".getBytes());
-        clientOutput.write("<b>It works!</b>".getBytes());
-        clientOutput.write("\r\n\r\n".getBytes());
-        clientOutput.flush();
-        cli.close();
-
-
-    }*/
 }

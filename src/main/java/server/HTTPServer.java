@@ -14,7 +14,7 @@ import java.util.StringTokenizer;
 public class HTTPServer implements Runnable {
     Socket cli;
     List<String> messages;
-    HTTPServer(Socket s, List<String> msg){
+    public HTTPServer(Socket s, List<String> msg){
 
         cli = s;
         messages = msg;
@@ -59,6 +59,7 @@ public class HTTPServer implements Runnable {
             if (inputStream != null) {
 
                 String headerPart = readFirstLineHeader(inputStream);
+
                 String[] headerPartSplit = headerPart.split(",");
                 //get the method
                 String method = headerPartSplit[0];
@@ -68,8 +69,7 @@ public class HTTPServer implements Runnable {
                 String version = headerPartSplit[2];
                 //save the content-type
                 String contentType = null;
-
-                if (!method.equals(RequestMethods.GET.getVal()) && !method.equals(RequestMethods.POST.getVal()) && !method.equals(RequestMethods.PUT.getVal()) && !method.equals(RequestMethods.DELETE.getVal())){
+                if (!RequestMethods.hasMethod(method)){
                     //send a response 501 not implemented, if we haven't implement the asked Method
                     sendRespond(out,contentSend, ResponseStatusCode.getDesc(501),version,contentType,"Wrong method chosen".getBytes());
                 }
@@ -78,16 +78,8 @@ public class HTTPServer implements Runnable {
                     String msgID = pathSpliter(path);
 
                     if (path.equals("/messages")) {
-                        int i = 0;
-
-                        StringBuilder msgBuilder = new StringBuilder();
-                        msgBuilder.append("{ ");
-                        while (i < messages.size() - 1) {
-                            msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i) + " , ");
-                            i++;
-                        }
-                        msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i)+" }");
-                        String allMessages = msgBuilder.toString();
+                        //take all messages in the List in a single string
+                        String allMessages = listAllElements(messages);
                         //send the respond to the client
                         sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, allMessages.getBytes());
 
@@ -140,13 +132,11 @@ public class HTTPServer implements Runnable {
                             messages.add(bodyContent);
                             //send the response on the client
                             String messageContent = messages.indexOf(messages.get(messages.size() - 1)) + 1 + ": " + messages.get(messages.size() - 1);
-                            //System.out.println("MSG: "+messageContent);
                             sendRespond(out, contentSend, ResponseStatusCode.getDesc(201), version, contentType, messageContent.getBytes());
                         } else {
                             messages.set(msgId - 1, bodyContent);
                             String specificMsgUpdate = messages.indexOf(messages.get(msgId - 1)) + 1 + ": " + messages.get(msgId - 1);
                             sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, specificMsgUpdate.getBytes());
-                            System.out.println("list:" + messages);
                         }
                     } else {
                         sendRespond(out, contentSend, ResponseStatusCode.getDesc(404), version, contentType, "You can only update a specific message".getBytes());
@@ -154,11 +144,7 @@ public class HTTPServer implements Runnable {
                 }
                 //delete a certain message from the list
                 else if(method.equals(RequestMethods.DELETE.getVal())){
-                    /*String msgID = null;
-                    String[] pathSplited = path.split("/");
-                    if (pathSplited.length == 3){
-                        msgID  = pathSplited[2];
-                    }*/
+
                     String msgID = pathSpliter(path);
 
                     if (path.equals("/messages/"+msgID)){
@@ -167,7 +153,7 @@ public class HTTPServer implements Runnable {
                             sendRespond(out, contentSend, ResponseStatusCode.getDesc(404), version, contentType, "ID not founded".getBytes());
                         }else{
                             messages.remove(msgId-1);
-                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, "".getBytes());
+                            sendRespond(out, contentSend, ResponseStatusCode.getDesc(200), version, contentType, "OK".getBytes());
                         }
 
                     }else{
@@ -189,7 +175,7 @@ public class HTTPServer implements Runnable {
         }
     }
 
-    private static String readFirstLineHeader(String input){
+    public static String readFirstLineHeader(String input){
         //parse the request
         //StringTokenizer st = new StringTokenizer(inputStream);
         StringTokenizer st = new StringTokenizer(input);
@@ -203,7 +189,7 @@ public class HTTPServer implements Runnable {
         String returnLine = method + "," + path + "," +version;
         return returnLine;
     }
-    private static String pathSpliter(String path){
+    public static String pathSpliter(String path){
         String msgID = null;
         String[] pathSplited = path.split("/");
         if (pathSplited.length == 3){
@@ -212,17 +198,30 @@ public class HTTPServer implements Runnable {
         }
         return null;
     }
+    public static String listAllElements(List<String> messages){
 
+        int i = 0;
+        StringBuilder msgBuilder = new StringBuilder();
+        msgBuilder.append("{ ");
+        while (i < messages.size() - 1) {
+            msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i) + " , ");
+            i++;
+        }
+        msgBuilder.append(messages.indexOf(messages.get(i))+1+":"+messages.get(i)+" }");
+        String allMessages = msgBuilder.toString();
+
+        return allMessages;
+    }
     private static void sendRespond(PrintWriter out,BufferedOutputStream contentSend, String status, String version, String contentTyp, byte[] content) throws IOException {
         //send the response to the client's output stream
         out.println(version +" "+ status);
-        out.println("ContentType: "+ contentTyp);
+        out.println("Content-Type: "+ contentTyp);
         out.println(); // blank line between headers and content
         out.flush(); // flush character output stream buffer
         contentSend.write(content);
         contentSend.flush();
     }
-    private static String takeTheBody(BufferedReader in) throws IOException {
+    public static String takeTheBody(BufferedReader in) throws IOException {
         //take the other part of the header + the body
         StringBuilder requestBody = new StringBuilder();
         //divide every field of the header and the last part(the body) with a newline

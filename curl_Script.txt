@@ -1,0 +1,31 @@
+#Github-Repo: https://github.com/arbermuca7/REST-HTTP-based-plain-text 
+
+echo 1) Insert something in the List
+
+curl -X POST --data "guten morgen" http://localhost:8080/messages
+curl -X POST --data "guten tag" http://localhost:8080/messages
+
+echo 2) Get the entire List
+
+curl -X GET http://localhost:8080/messages
+
+echo 3) Insert to the list
+
+curl -X POST --data "guten abend" http://localhost:8080/messages
+
+echo 4) Get specific messages
+
+curl -X GET http://localhost:8080/messages
+curl -X GET http://localhost:8080/messages/1
+curl -X GET http://localhost:8080/messages/3
+
+echo 5) Update a certain message
+
+curl -X PUT --data "guten nacht" http://localhost:8080/messages/1
+curl -X GET http://localhost:8080/messages
+
+echo 1) Delete a certain message
+
+curl -X DELETE http://localhost:8080/messages/1
+curl -X GET http://localhost:8080/messages
+

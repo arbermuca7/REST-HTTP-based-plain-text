@@ -87,7 +87,4 @@ public class HTTPServerTests {
         assertEquals(contentType_expected,contentType_actual);
 
     }
-
-
-
 }
